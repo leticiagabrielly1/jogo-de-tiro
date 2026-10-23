@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#080b12">
+    <title>DEAD ZONE — Metrópole Morta</title>
+
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #080b12;
+            --panel: rgba(16, 20, 30, .94);
+            --red: #ff465e;
+            --muted: #9da5b7;
+            --line: rgba(255, 255, 255, .12);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        [hidden] { display: none !important; }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            color: #f1f4fa;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        body { user-select: none; }
+        input { user-select: text; }
+        button, input, select { font: inherit; }
+
+        button {
+            padding: 15px 22px;
+            border: 1px solid transparent;
+            border-radius: 9px;
+            background: linear-gradient(135deg, #f04059, #a41636);
+            color: white;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 1.3px;
+            cursor: pointer;
+            transition: filter .2s, transform .2s;
+        }
+
+        button:hover { filter: brightness(1.15); transform: translateY(-2px); }
+        button:disabled { opacity: .5; cursor: wait; }
+        button:focus-visible, input:focus-visible, select:focus-visible {
+            outline: 2px solid #6de4c0;
+            outline-offset: 4px;
+        }
+
+        .secondary { background: #301722; border-color: #813045; color: #ff9caf; }
+        .ghost { background: #ffffff05; border-color: var(--line); color: #c6cddd; }
+        .text-button { background: transparent; color: var(--muted); padding: 10px; }
+
+        input, select {
+            width: 100%;
+            background: #080d17;
+            color: white;
+            border: 1px solid #384153;
+            border-radius: 8px;
+            padding: 13px;
+        }
+
+        input[type="range"] { padding: 0; accent-color: var(--red); }
+        input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--red); }
+        input[type="color"] { height: 42px; padding: 4px; }
+
+        #game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+        #vignette, #damage-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        #vignette { box-shadow: inset 0 0 160px 30px #0009; }
+        #damage-overlay { opacity: 0; box-shadow: inset 0 0 140px 35px #db142bbb; }
+        #damage-overlay.critical { animation: critical 1.4s infinite; }
+
+        @keyframes critical {
+            0%, 100% { opacity: .2; }
+            50% { opacity: .55; }
+        }
+
+        .screen {
+            position: fixed;
+            inset: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 28px;
+            overflow-y: auto;
+            background:
+                radial-gradient(ellipse at 10% 15%, #671c343d, transparent 55%),
+                radial-gradient(ellipse at 90% 80%, #17325255, transparent 60%),
+                linear-gradient(130deg, #070b13f5, #111522f2);
+            backdrop-filter: blur(10px);
+        }
+
+        .menu-card {
+            width: min(700px, 100%);
+            margin: auto;
+            padding: 34px;
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            background: linear-gradient(145deg, #141925dd, #0c101bd9);
+            box-shadow: 0 30px 100px #0007;
+            text-align: center;
+        }
+
+        .compact { max-width: 470px; }
+        .wide { max-width: 920px; }
+
+        .eyebrow {
+            display: block;
+            margin-bottom: 24px;
+            color: #e09aa8;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 3px;
+        }
+
+        h1 {
+            font-size: clamp(45px, 8vw, 88px);
+            font-weight: 950;
+            letter-spacing: -4px;
+            line-height: 1;
+            margin-bottom: 25px;
+        }
+
+        h1 span { color: var(--red); }
+        h2 { font-size: clamp(26px, 4vw, 42px); margin-bottom: 23px; letter-spacing: 2px; }
+
+        .subtitle { color: #bdc5d5; font-size: 14px; line-height: 1.8; margin-bottom: 25px; }
+        .muted { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 16px 0; }
+        .error { color: #ff9bac; font-size: 13px; line-height: 1.6; margin-top: 14px; }
+
+        .profile-form { display: grid; gap: 14px; max-width: 350px; margin: auto; text-align: left; }
+        label, .field-label { font-size: 12px; color: #c2cad9; font-weight: 600; }
+        .field-label { display: block; margin-bottom: 12px; }
+        #difficulty, #ranking-difficulty { max-width: 350px; margin-bottom: 15px; }
+
+        .button-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 16px 0; }
+        .button-column { display: grid; gap: 12px; }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            text-align: left;
+            padding: 20px;
+            background: #ffffff04;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+        }
+
+        .controls-grid p { font-size: 12px; line-height: 1.7; color: #c5ccda; }
+        kbd { display: inline-block; background: #40202d; color: #ff9cae; border: 1px solid #753144; padding: 4px 7px; border-radius: 4px; margin-right: 5px; font-size: 10px; }
+        .help-text { color: #b1bacb; font-size: 13px; line-height: 1.9; margin: 22px 0; }
+
+        .settings { display: grid; gap: 20px; text-align: left; margin: 20px 0 25px; }
+        .settings label { display: block; }
+        .settings input[type="range"], .settings select { display: block; margin-top: 12px; }
+        .settings output { float: right; color: #ff7b91; }
+        .settings .check-row { display: flex; justify-content: space-between; align-items: center; }
+
+        #hud {
+            position: fixed;
+            inset: 0;
+            z-index: 5;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 22px;
+        }
+
+        .hud-top, .hud-bottom { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+        .hud-bottom { align-items: flex-end; }
+
+        .panel, .stats-panel, .map-panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: 0 10px 35px #0005;
+        }
+
+        .stats-panel { display: flex; gap: 25px; padding: 16px 23px; }
+        .stats-panel small { display: block; color: #a5aabd; font-size: 9px; letter-spacing: 2px; margin-bottom: 6px; }
+        .stats-panel strong { color: #ff7187; font-size: 24px; font-variant-numeric: tabular-nums; }
+
+        .map-panel { padding: 9px; text-align: center; }
+        #minimap { display: block; width: 150px; height: 150px; margin: auto; }
+        .map-panel small { display: block; margin-top: 6px; font-size: 7px; color: #a0a9ba; }
+
+        .vitals { width: 250px; padding: 15px 18px; }
+        .bar-label { display: flex; justify-content: space-between; font-size: 9px; letter-spacing: 1px; margin: 5px 0; }
+        .bar { height: 6px; border-radius: 5px; overflow: hidden; background: #ffffff15; margin-bottom: 11px; }
+        .bar > div { width: 100%; height: 100%; transition: width .1s; }
+
+        #health-fill { background: #f24c69; }
+        #shield-fill { background: #ddb16e; }
+        #stamina-fill { background: #6ee3ba; }
+        .small-info { color: #9ca7bb; font-size: 10px; margin-top: 9px; }
+
+        .weapon-slots { display: flex; gap: 8px; }
+        .weapon-slot { min-height: 69px; width: 75px; text-align: center; background: #111827ee; border: 1px solid #ffffff15; border-radius: 9px; padding: 12px 5px; color: #919caf; }
+        .weapon-slot b, .weapon-slot small { display: block; }
+        .weapon-slot b { margin-bottom: 8px; font-size: 17px; }
+        .weapon-slot small { font-size: 8px; letter-spacing: .5px; }
+        .weapon-slot.active { color: white; background: #582238dd; border-color: #f45a77; transform: translateY(-5px); }
+
+        .ammo-panel { min-width: 170px; padding: 18px 22px; text-align: right; }
+        #ammo-clip { font-size: 38px; }
+        #ammo-reserve { font-size: 17px; color: #97a3b9; }
+        .ammo-panel b, .ammo-panel small { display: block; font-size: 10px; margin-top: 7px; letter-spacing: 1px; }
+        .ammo-panel small { font-size: 8px; color: #96a1b5; }
+
+        #crosshair, #hitmarker { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        #crosshair { width: 30px; height: 30px; }
+        #crosshair i { position: absolute; background: #ff7084; box-shadow: 0 0 5px #ff4267; }
+        #crosshair i:nth-child(1) { width: 2px; height: 7px; left: 14px; top: 0; }
+        #crosshair i:nth-child(2) { width: 2px; height: 7px; left: 14px; bottom: 0; }
+        #crosshair i:nth-child(3) { width: 7px; height: 2px; left: 0; top: 14px; }
+        #crosshair i:nth-child(4) { width: 7px; height: 2px; right: 0; top: 14px; }
+        #crosshair.fired { transform: translate(-50%, -50%) scale(1.4); }
+        #hitmarker { font-size: 36px; color: #7bffc0; opacity: 0; }
+
+        #notice, #interaction, #wave-banner, #combo { position: absolute; left: 50%; transform: translateX(-50%); text-align: center; }
+        #notice { top: 58%; color: #ffd18d; font-size: 12px; font-weight: 700; }
+        #interaction { top: 64%; color: #8affcf; font-size: 12px; }
+        #wave-banner { top: 25%; width: 90%; font-size: clamp(20px, 3vw, 38px); font-weight: 900; color: #ff7a8a; letter-spacing: 2px; text-shadow: 0 0 25px #ba2645; }
+        #combo { top: 110px; font-size: 20px; font-weight: 900; color: #ffd389; }
+
+        #powerups { position: absolute; top: 230px; right: 22px; display: grid; gap: 7px; }
+        .powerup { background: #14352bdc; border: 1px solid #3d8063; padding: 8px 12px; border-radius: 7px; font-size: 10px; color: #aaffda; }
+
+        #score-popups { position: absolute; inset: 0; overflow: hidden; }
+        .score-popup { position: absolute; color: #ffdc96; font-weight: 800; font-size: 14px; animation: float-score .85s forwards; }
+
+        @keyframes float-score {
+            from { opacity: 1; transform: translate(-50%, 0); }
+            to { opacity: 0; transform: translate(-50%, -55px); }
+        }
+
+        .results { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 24px 0; }
+        .result { padding: 20px 10px; border: 1px solid var(--line); border-radius: 10px; background: #ffffff04; }
+        .result small { display: block; color: #9ba8bc; font-size: 10px; margin-bottom: 8px; }
+        .result strong { color: #ff8197; font-size: 23px; }
+
+        .table-wrap { overflow: auto; max-height: 50vh; margin-bottom: 22px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+        th, td { padding: 14px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+        th { color: #efa3b3; background: #1e1825; }
+
+        .editor-layout { display: flex; gap: 20px; width: min(1200px, 100%); height: min(720px, 90vh); margin: auto; }
+        .editor-sidebar { display: flex; flex-direction: column; gap: 16px; width: 310px; flex-shrink: 0; padding: 24px; background: #151d2a; border: 1px solid var(--line); border-radius: 14px; overflow-y: auto; }
+        .editor-sidebar h2 { font-size: 26px; margin: 0; }
+        .editor-sidebar .eyebrow { font-size: 8px; margin: 0; }
+        .editor-sidebar label input, .editor-sidebar label select { display: block; margin-top: 9px; }
+        .editor-preview { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+        #editor-canvas { display: block; width: 100%; height: 100%; }
+
+        #global-error {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(700px, 94vw);
+            max-height: 35vh;
+            overflow: auto;
+            z-index: 200;
+            padding: 17px 22px;
+            background: #451a29;
+            color: #ffdce4;
+            border: 1px solid #d86684;
+            border-radius: 10px;
+            font-size: 13px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            user-select: text;
+        }
+
+        @media (max-width: 800px) {
+            #hud { padding: 12px; }
+            .stats-panel { gap: 14px; padding: 12px; }
+            .stats-panel strong { font-size: 18px; }
+            #minimap { width: 100px; height: 100px; }
+            .map-panel small { display: none; }
+            .vitals { width: 190px; }
+            .weapon-slot { width: 48px; }
+            .ammo-panel { min-width: 130px; padding: 12px; }
+            .editor-layout { flex-direction: column; height: auto; }
+            .editor-sidebar { width: 100%; }
+            .editor-preview { flex: none; height: 320px; }
+        }
+
+        @media (max-width: 560px) {
+            .screen { padding: 15px; }
+            .menu-card { padding: 26px 18px; }
+            .controls-grid { grid-template-columns: 1fr; }
+            .results { grid-template-columns: 1fr 1fr; }
+            .weapon-slots { position: absolute; bottom: 185px; left: 12px; }
+            .map-panel { display: none; }
+            .vitals { width: 170px; }
+            .hud-bottom { gap: 8px; }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="game-canvas" aria-label="Cenário do jogo"></canvas>
+
+    <div id="vignette"></div>
+    <div id="damage-overlay"></div>
+
+    <main id="hud" hidden>
+        <div class="hud-top">
+            <div class="stats-panel">
+                <div>
+                    <small>NOITE</small>
+                    <strong id="hud-wave">1</strong>
+                </div>
+                <div>
+                    <small>ZUMBIS</small>
+                    <strong id="hud-enemies">0</strong>
+                </div>
+                <div>
+                    <small>PONTOS</small>
+                    <strong id="hud-score">0</strong>
+                </div>
+                <div>
+                    <small>TEMPO</small>
+                    <strong id="hud-time">00:00</strong>
+                </div>
+            </div>
+
+            <div class="map-panel">
+                <canvas id="minimap" width="170" height="170"></canvas>
+                <small>VERMELHO: ZUMBIS · VERDE: CAIXAS</small>
+            </div>
+        </div>
+
+        <div id="combo"></div>
+
+        <div id="crosshair">
+            <i></i><i></i><i></i><i></i>
+        </div>
+
+        <div id="hitmarker">×</div>
+        <div id="notice" role="status"></div>
+        <div id="interaction"></div>
+        <div id="wave-banner"></div>
+        <div id="powerups"></div>
+        <div id="score-popups"></div>
+
+        <div class="hud-bottom">
+            <div class="vitals panel">
+                <div class="bar-label">
+                    <span>VIDA</span>
+                    <b id="health-text">100</b>
+                </div>
+                <div class="bar"><div id="health-fill"></div></div>
+
+                <div class="bar-label">
+                    <span>COLETE</span>
+                    <b id="shield-text">100</b>
+                </div>
+                <div class="bar"><div id="shield-fill"></div></div>
+
+                <div class="bar-label">
+                    <span>FÔLEGO</span>
+                    <b id="stamina-text">100</b>
+                </div>
+                <div class="bar"><div id="stamina-fill"></div></div>
+
+                <div class="small-info">
+                    F: lanterna <span id="flashlight-text">desligada</span>
+                </div>
+            </div>
+
+            <div id="weapon-slots" class="weapon-slots"></div>
+
+            <div class="ammo-panel panel">
+                <div>
+                    <strong id="ammo-clip">12</strong>
+                    <span id="ammo-reserve"> / 48</span>
+                </div>
+                <b id="weapon-name">PISTOLA</b>
+                <small id="reload-status">R PARA RECARREGAR</small>
+            </div>
+        </div>
+    </main>
+
+    <section id="profile-screen" class="screen">
+        <div class="menu-card">
+            <span class="eyebrow">SETOR METROPOLITANO EM QUARENTENA</span>
+            <h1>DEAD<span>ZONE</span></h1>
+            <p class="subtitle">A cidade ficou em silêncio. As ruas, não.</p>
+
+            <form id="profile-form" class="profile-form">
+                <label for="nickname">Seu codinome</label>
+                <input
+                    id="nickname"
+                    type="text"
+                    minlength="2"
+                    maxlength="24"
+                    placeholder="Agente_01"
+                    autocomplete="nickname"
+                    required
+                >
+                <button type="submit">ACESSAR SISTEMA</button>
+            </form>
+
+            <p id="profile-error" class="error" role="alert"></p>
+
+            <p class="muted">
+                Escolha seu codinome para acessar o menu e iniciar uma partida.
+            </p>
+
+            <noscript>
+                <p class="error">Ative o JavaScript no navegador para jogar.</p>
+            </noscript>
+        </div>
+    </section>
+
+    <section id="menu-screen" class="screen" hidden>
+        <div class="menu-card">
+            <span class="eyebrow">SURVIVAL / CITY HORROR FPS</span>
+
+            <h1>METRÓPOLE<br><span>MORTA</span></h1>
+
+            <p id="welcome" class="subtitle"></p>
+
+            <label for="difficulty" class="field-label">
+                Dificuldade da próxima partida
+            </label>
+
+            <select id="difficulty">
+                <option value="easy">Exploração — fácil</option>
+                <option value="normal" selected>Sobrevivência — normal</option>
+                <option value="hard">Pesadelo — difícil</option>
+            </select>
+
+            <div class="button-row">
+                <button id="play-button">ENTRAR NA CIDADE</button>
+                <button id="ranking-button" class="secondary">RANKING</button>
+            </div>
+
+            <div class="button-row">
+                <button id="settings-button" class="ghost">CONFIGURAÇÕES</button>
+                <button id="help-button" class="ghost">COMO JOGAR</button>
+                <button id="editor-button" class="ghost">ESTÚDIO 3D</button>
+            </div>
+
+            <button id="change-name" class="text-button">ALTERAR CODINOME</button>
+
+            <p class="muted">Teclado e mouse · ESC para pausar</p>
+        </div>
+    </section>
+
+    <section id="pause-screen" class="screen" hidden>
+        <div class="menu-card compact">
+            <span class="eyebrow">RESPIRE. REORGANIZE. SOBREVIVA.</span>
+            <h2>PAUSADO</h2>
+            <p class="subtitle">O tempo da partida está parado.</p>
+
+            <div class="button-column">
+                <button id="resume-button">CONTINUAR</button>
+                <button id="pause-settings" class="secondary">CONFIGURAÇÕES</button>
+                <button id="pause-help" class="secondary">COMO JOGAR</button>
+                <button id="quit-button" class="ghost">ENCERRAR E SALVAR</button>
+            </div>
+        </div>
+    </section>
+
+    <section id="help-screen" class="screen" hidden>
+        <div class="menu-card">
+            <h2>COMO JOGAR</h2>
+            <p class="subtitle">Explore os edifícios, colete suprimentos e sobreviva às hordas.</p>
+
+            <div class="controls-grid">
+                <p><kbd>W A S D</kbd> Movimentar</p>
+                <p><kbd>MOUSE</kbd> Mirar</p>
+                <p><kbd>CLIQUE</kbd> Atirar</p>
+                <p><kbd>SHIFT</kbd> Correr</p>
+                <p><kbd>ESPAÇO</kbd> Pular</p>
+                <p><kbd>E</kbd> Coletar</p>
+                <p><kbd>1–4 / RODA</kbd> Trocar arma</p>
+                <p><kbd>R</kbd> Recarregar</p>
+                <p><kbd>F</kbd> Lanterna</p>
+                <p><kbd>ESC</kbd> Pausar</p>
+            </div>
+
+            <p class="help-text">
+                Acerte a cabeça para causar mais dano. Elimine inimigos em sequência
+                para ganhar combos. Colete cristais para recuperar recursos ou receber
+                vantagens temporárias. O colete se recupera após alguns segundos sem dano.
+            </p>
+
+            <button id="help-back" class="secondary">VOLTAR</button>
+        </div>
+    </section>
+
+    <section id="settings-screen" class="screen" hidden>
+        <div class="menu-card compact">
+            <h2>CONFIGURAÇÕES</h2>
+
+            <div class="settings">
+                <label>
+                    Volume geral <output id="volume-label"></output>
+                    <input id="volume" type="range" min="0" max="100">
+                </label>
+
+                <label>
+                    Volume dos efeitos <output id="sfx-label"></output>
+                    <input id="sfx" type="range" min="0" max="100">
+                </label>
+
+                <label>
+                    Sensibilidade <output id="sensitivity-label"></output>
+                    <input id="sensitivity" type="range" min="10" max="100">
+                </label>
+
+                <label>
+                    Qualidade gráfica
+                    <select id="quality">
+                        <option value="low">Baixa</option>
+                        <option value="medium">Média</option>
+                        <option value="high">Alta</option>
+                    </select>
+                </label>
+
+                <label class="check-row">
+                    Som ativado <input id="sound" type="checkbox">
+                </label>
+
+                <label class="check-row">
+                    Efeitos visuais <input id="effects" type="checkbox">
+                </label>
+
+                <label class="check-row">
+                    Partículas <input id="particles" type="checkbox">
+                </label>
+
+                <label class="check-row">
+                    Tremor da câmera <input id="shake" type="checkbox">
+                </label>
+
+                <label class="check-row">
+                    Mostrar minimapa <input id="show-map" type="checkbox">
+                </label>
+            </div>
+
+            <button id="settings-back">SALVAR E VOLTAR</button>
+        </div>
+    </section>
+
+    <section id="ranking-screen" class="screen" hidden>
+        <div class="menu-card wide">
+            <span class="eyebrow">REGISTROS DE SOBREVIVÊNCIA</span>
+            <h2>RANKING</h2>
+
+            <select id="ranking-difficulty">
+                <option value="easy">Exploração</option>
+                <option value="normal" selected>Sobrevivência</option>
+                <option value="hard">Pesadelo</option>
+            </select>
+
+            <p id="ranking-status" class="muted" role="status"></p>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Jogador</th>
+                            <th>Pontos</th>
+                            <th>Onda</th>
+                            <th>Abates</th>
+                            <th>Tempo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ranking-body"></tbody>
+                </table>
+            </div>
+
+            <button id="ranking-back" class="secondary">VOLTAR</button>
+        </div>
+    </section>
+
+    <section id="over-screen" class="screen" hidden>
+        <div class="menu-card">
+            <span class="eyebrow">RELATÓRIO DA OPERAÇÃO</span>
+            <h2 id="over-title">FIM DE JOGO</h2>
+
+            <div id="results" class="results"></div>
+
+            <p id="save-status" class="muted" role="status"></p>
+
+            <button id="retry-save" class="ghost" hidden>
+                TENTAR SALVAR NOVAMENTE
+            </button>
+
+            <div class="button-row">
+                <button id="retry-button">JOGAR NOVAMENTE</button>
+                <button id="over-menu" class="secondary">MENU</button>
+            </div>
+        </div>
+    </section>
+
+    <section id="editor-screen" class="screen" hidden>
+        <div class="editor-layout">
+            <div class="editor-sidebar">
+                <span class="eyebrow">CRIE OBJETOS PARA O CENÁRIO</span>
+                <h2>ESTÚDIO 3D</h2>
+
+                <label>
+                    Geometria
+                    <select id="object-type">
+                        <option value="box">Bloco urbano</option>
+                        <option value="cylinder">Pilar metálico</option>
+                        <option value="sphere">Orbe de energia</option>
+                        <option value="cone">Torre</option>
+                    </select>
+                </label>
+
+                <label>
+                    Cor
+                    <input id="object-color" type="color" value="#d4a373">
+                </label>
+
+                <label>
+                    Rugosidade
+                    <input
+                        id="object-roughness"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step=".05"
+                        value=".7"
+                    >
+                </label>
+
+                <label>
+                    Tamanho
+                    <input
+                        id="object-scale"
+                        type="range"
+                        min=".5"
+                        max="2"
+                        step=".1"
+                        value="1"
+                    >
+                </label>
+
+                <p class="muted">
+                    Os objetos têm colisão e ficam no cenário até recarregar a página.
+                </p>
+
+                <p id="editor-status" role="status"></p>
+
+                <button id="insert-object">INSERIR NO CENÁRIO</button>
+                <button id="clear-objects" class="secondary">REMOVER OBJETOS CRIADOS</button>
+                <button id="editor-back" class="ghost">VOLTAR</button>
+            </div>
+
+            <div class="editor-preview">
+                <canvas id="editor-canvas"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <div id="global-error" role="alert" hidden></div>
+
+    <script id="bootstrap" type="application/json">{{ bootstrap | tojson }}</script>
+
+    <script>
+        window.deadzoneLoadError = function (message) {
+            const box = document.getElementById("global-error");
+            box.textContent = message;
+            box.hidden = false;
+        };
+
+        window.addEventListener("error", function (event) {
+            if (!event.message) return;
+
+            const file = event.filename
+                ? event.filename.split("/").pop()
+                : "";
+
+            window.deadzoneLoadError(
+                "Erro ao executar o jogo: " +
+                event.message +
+                (file ? "\nArquivo: " + file : "") +
+                (event.lineno ? " — linha " + event.lineno : "")
+            );
+        });
+
+        window.addEventListener("unhandledrejection", function (event) {
+            const message = event.reason && event.reason.message
+                ? event.reason.message
+                : String(event.reason || "Erro desconhecido");
+
+            window.deadzoneLoadError("Não foi possível concluir a operação: " + message);
+        });
+
+        document.getElementById("profile-form").addEventListener(
+            "submit",
+            function (event) {
+                const button = this.querySelector("button");
+
+                if (!window.THREE) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    window.deadzoneLoadError(
+                        "O Three.js não carregou. Confira a conexão com a internet e atualize a página."
+                    );
+                    return;
+                }
+
+                if (!window.deadzoneScriptLoaded) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    window.deadzoneLoadError(
+                        "O game.js não carregou. Coloque o código completo em static/js/game.js."
+                    );
+                }
+            },
+            true
+        );
+    </script>
+
+    <script
+        src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+        onerror="deadzoneLoadError('Falha ao carregar o Three.js pela internet. Confira a conexão e atualize a página.')"
+    ></script>
+
+    <script
+        src="{{ url_for('game_script') }}"
+        onload="window.deadzoneScriptLoaded = true"
+        onerror="deadzoneLoadError('game.js não encontrado ou não carregado. Salve o JavaScript completo em static/js/game.js ou static/game.js e reinicie o Flask.')"
+    ></script>
+</body>
+</html>
